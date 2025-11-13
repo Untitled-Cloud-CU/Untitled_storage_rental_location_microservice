@@ -140,6 +140,14 @@ class AddressRead(AddressBase):
         description="Last update timestamp (UTC).",
         json_schema_extra={"example": "2025-01-16T12:00:00Z"},
     )
+    links: Optional[list] = Field(
+        None,
+        description="Linked data / relative links for this resource (e.g. [{rel: 'self', href: '/addresses/{id}'}]).",
+        json_schema_extra={"example": [
+            {"rel": "self", "href": "/addresses/550e8400-e29b-41d4-a716-446655440000"},
+            {"rel": "collection", "href": "/addresses"}
+        ]},
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -155,6 +163,10 @@ class AddressRead(AddressBase):
                     "country": "USA",
                     "created_at": "2025-01-15T10:20:30Z",
                     "updated_at": "2025-01-16T12:00:00Z",
+                    "links": [
+                        {"rel": "self", "href": "/addresses/550e8400-e29b-41d4-a716-446655440000"},
+                        {"rel": "collection", "href": "/addresses"}
+                    ],
                 }
             ]
         }
