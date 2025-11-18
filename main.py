@@ -10,6 +10,9 @@ import time
 
 import mysql.connector
 from fastapi import FastAPI, HTTPException, Query, Response, Request, BackgroundTasks, status
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict, Any
 
 from models.address import AddressCreate, AddressRead, AddressUpdate, AddressDelete
 
@@ -47,6 +50,14 @@ app = FastAPI(
     title="Address API",
     description="Demo FastAPI app using MySQL for Address storage",
     version="0.2.0",
+)
+
+# Enable CORS for all origins (no credentials allowed)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # -----------------------------------------------------------------------------
@@ -91,7 +102,11 @@ def create_address(address: AddressCreate, response: Response):
     response.headers["ETag"] = compute_etag(created.model_dump())
     return created
 
-@app.get("/addresses", response_model=List[AddressRead])
+class AddressCollection(BaseModel):
+    data: List[AddressRead]
+    links: List[Dict[str, Any]]
+
+@app.get("/addresses", response_model=AddressCollection)
 def list_addresses(
     response: Response,
     name: Optional[str] = Query(None),
