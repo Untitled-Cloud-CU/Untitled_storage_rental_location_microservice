@@ -13,8 +13,9 @@ from fastapi import FastAPI, HTTPException, Query, Response, Request, Background
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
+from fastapi.responses import JSONResponse
 
-from models.address import AddressCreate, AddressRead, AddressUpdate, AddressDelete
+from models.address import AddressCreate, AddressRead, AddressUpdate, AddressDelete, addresses_to_features
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -55,7 +56,8 @@ app = FastAPI(
 # Enable CORS for all origins (no credentials allowed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -106,7 +108,7 @@ class AddressCollection(BaseModel):
     data: List[AddressRead]
     links: List[Dict[str, Any]]
 
-@app.get("/addresses", response_model=AddressCollection)
+@app.get("/addresses")
 def list_addresses(
     response: Response,
     name: Optional[str] = Query(None),
@@ -118,6 +120,7 @@ def list_addresses(
     country: Optional[str] = Query(None),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    as_geojson: bool = Query(False, description="Return as GeoJSON FeatureCollection if true"),
 ):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -192,6 +195,9 @@ def list_addresses(
         next_off = offset + limit
         links.append({"rel": "next", "href": f"{base}{make_qs({'limit': limit, 'offset': next_off})}"})
     response.headers["X-Total-Count"] = str(total)
+    if as_geojson:
+        features = addresses_to_features([item.model_dump() for item in items])
+        return JSONResponse(content={"type": "FeatureCollection", "features": features})
     return {"data": items, "links": links}
 
 @app.get("/addresses/{address_id}", response_model=AddressRead)

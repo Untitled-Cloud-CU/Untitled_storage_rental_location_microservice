@@ -200,3 +200,35 @@ class AddressDelete(BaseModel):
             ]
         }
     }
+
+
+def address_to_feature(address: dict, lon: float = -73.961967, lat: float = 40.808040) -> dict:
+    """
+    Map an address dict to a GeoJSON Feature dict.
+    Coordinates are fake unless provided since we are using thrid-party map api
+    """
+    return {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [lon, lat],
+        },
+        "properties": {
+            "name": address.get("name"),
+            "address": address.get("street"),
+            "unit": address.get("unit"),
+            "city": address.get("city"),
+            "state": address.get("state"),
+            "country": address.get("country"),
+            "postalCode": address.get("postal_code"),
+            "size": address.get("size", "5x5"),
+            "pricePerDay": address.get("pricePerDay", "15"),
+        }
+    }
+
+
+def addresses_to_features(addresses: list, lon: float = -73.961967, lat: float = 40.808040) -> list:
+    """
+    Map a list of address dicts to a list of GeoJSON Feature dicts.
+    """
+    return [address_to_feature(addr, lon, lat) for addr in addresses]
