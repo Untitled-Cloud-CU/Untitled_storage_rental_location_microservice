@@ -5,7 +5,8 @@ from typing import Optional
 from uuid import UUID, uuid4
 from datetime import datetime
 from pydantic import BaseModel, Field
-
+import requests
+from utils.db import get_db_connection
 
 class AddressBase(BaseModel):
     id: UUID = Field(
@@ -201,18 +202,89 @@ class AddressDelete(BaseModel):
         }
     }
 
+def get_cached_coordinates(db, address: dict):
+    query = """
+        SELECT lat, lon FROM addresses
+        WHERE street=%s AND city=%s AND state=%s AND postal_code=%s AND country=%s
+        LIMIT 1;
+    """
+    params = (
+        address.get("street"),
+        address.get("city"),
+        address.get("state"),
+        address.get("postal_code"),
+        address.get("country"),
+    )
 
-def address_to_feature(address: dict, lon: float = -73.961967, lat: float = 40.808040) -> dict:
+    cursor = db.cursor()
+    cursor.execute(query, params)
+    row = cursor.fetchone()
+
+    if row and row[0] is not None and row[1] is not None:
+        return row[1], row[0]  # lon, lat
+
+    return None, None
+
+
+def save_coordinates(db, address: dict, lat: float, lon: float):
+    query = """
+        UPDATE addresses
+        SET lat=%s, lon=%s
+        WHERE street=%s AND city=%s AND state=%s AND postal_code=%s AND country=%s;
     """
-    Map an address dict to a GeoJSON Feature dict.
-    Coordinates are fake unless provided since we are using thrid-party map api
+    params = (
+        lat, lon,
+        address.get("street"),
+        address.get("city"),
+        address.get("state"),
+        address.get("postal_code"),
+        address.get("country"),
+    )
+
+    cursor = db.cursor()
+    cursor.execute(query, params)
+    db.commit()
+
+
+def geocode_address(address: dict) -> tuple[float, float]:
     """
+    Geocode an address dict to (lon, lat) using Nominatim (OpenStreetMap).
+    Returns (lon, lat) or (None, None) if not found.
+    """
+    address_str = f"{address.get('street', '')}, {address.get('city', '')}, {address.get('state', '') or ''}, {address.get('country', '')}"
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {"q": address_str, "format": "json", "limit": 1}
+    headers = {"User-Agent": "storage-rental-microservice/1.0"}
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=5)
+        resp.raise_for_status()
+        results = resp.json()
+        print("Geocoding results:", results)
+        if results:
+            lat = float(results[0]["lat"])
+            lon = float(results[0]["lon"])
+            return lon, lat
+    except Exception:
+        pass
+    return None, None
+
+
+def address_to_feature(db, address: dict, lon: float = None, lat: float = None) -> dict:
+    if lon is None or lat is None:
+        lon, lat = get_cached_coordinates(db, address)
+
+    if lon is None or lat is None:
+        lon, lat = geocode_address(address)
+
+        if lon is not None and lat is not None:
+            save_coordinates(db, address, lat, lon)
+
+    if lon is None or lat is None:
+        lon, lat = -73.961967, 40.808040
+
     return {
         "type": "Feature",
-        "geometry": {
-            "type": "Point",
-            "coordinates": [lon, lat],
-        },
+        "geometry": {"type": "Point", "coordinates": [lon, lat]},
         "properties": {
             "name": address.get("name"),
             "address": address.get("street"),
@@ -227,8 +299,9 @@ def address_to_feature(address: dict, lon: float = -73.961967, lat: float = 40.8
     }
 
 
-def addresses_to_features(addresses: list, lon: float = -73.961967, lat: float = 40.808040) -> list:
+def addresses_to_features(db, addresses: list) -> list:
     """
-    Map a list of address dicts to a list of GeoJSON Feature dicts.
+    Map a list of address dicts to a list of GeoJSON Feature dicts, geocoding each.
     """
-    return [address_to_feature(addr, lon, lat) for addr in addresses]
+    db = get_db_connection()
+    return [address_to_feature(db, addr) for addr in addresses]

@@ -196,8 +196,10 @@ def list_addresses(
         links.append({"rel": "next", "href": f"{base}{make_qs({'limit': limit, 'offset': next_off})}"})
     response.headers["X-Total-Count"] = str(total)
     if as_geojson:
-        features = addresses_to_features([item.model_dump() for item in items])
-        return JSONResponse(content={"type": "FeatureCollection", "features": features})
+        features = addresses_to_features(conn, [item.model_dump() for item in items])
+        return JSONResponse(content={"type": "FeatureCollection", "features": features,
+            "links": links,      # Include pagination links
+            "total": total  })
     return {"data": items, "links": links}
 
 @app.get("/addresses/{address_id}", response_model=AddressRead)
