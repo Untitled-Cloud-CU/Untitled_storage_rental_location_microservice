@@ -200,7 +200,7 @@ def list_addresses(
         return JSONResponse(content={"type": "FeatureCollection", "features": features,
             "links": links,      # Include pagination links
             "total": total  })
-    return {"data": items, "links": links}
+    return {"data": items, "links": links, "total": total }
 
 @app.get("/addresses/{address_id}", response_model=AddressRead)
 def get_address(address_id: UUID, response: Response):
